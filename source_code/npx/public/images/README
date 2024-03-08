@@ -1,2 +1,0 @@
-this file exists so that cloning the repo doesn't ignore this folder tree.
-This directory contains images, it is where we store them on our server instead of using s3. We just render the image at the link to these files

@@ -1,0 +1,4 @@
+If the first and last digit are equal, swap the middle two
+All numbers are even, reverse the code
+If all but one numbers are odd, the code is 1234
+If no rules apply, the code is 0000
