@@ -4,41 +4,80 @@ import Rule from './Rule';
 import axios from 'axios'
 
 const Main = () => {
+  // User can change this in the application
+  const defaultIP = 'localhost'
+
   const [textInput, setTextInput] = useState('');
   const [fileLineComps, setFileLineComps] = useState([]);
   const [components, setComponents] = useState([]);
   const [lastQuestion, setLastQuestion] = useState('');
   const [headerColor, setHeaderColor] = useState('black')
   const [headerTxt, setHeaderTxt] = useState('Waiting for player to guess number');
-
+  const [NODE_IP, setNodeIp] = useState((localStorage.getItem('ip') && localStorage.getItem('ip') !== 'undefined')? localStorage.getItem('ip') : defaultIP)
+  const [ipText, setIPText] = useState(NODE_IP)
+  const [conn, setConn] = useState(false)
+  const [ready, setReady] = useState(false)
+  
   const [ws, setWs] = useState(null); // State to hold WebSocket instance
-  const SOCK_PORT = 2173;
-  const NODE_PORT = 3001
-  const SERVER_URL = `http://localhost:${NODE_PORT}`
+
+  // Ensure these match the ports in the Node server and the Unity client
+  const SOCK_PORT = 2174;
+  const NODE_PORT = 2175
+  const SERVER_URL = `http://${NODE_IP}:${NODE_PORT}`
   
   document.body.style = 'background: #f2f2f2';
+
   // Setup websocket: React--Node communication
+  // Occurs on refresh / first load
   useEffect(() => {
-    const newWs = new WebSocket(`ws://localhost:${SOCK_PORT}`);
+    // Reach the WebSocket hosted on the Node.js server
+    const newWs = new WebSocket(`ws://${NODE_IP}:${SOCK_PORT}`);
     setWs(newWs);
 
     newWs.onopen = () => {
-      console.log('Connected to WebSocket server');
+      console.log('Connected to Node.js WebSocket');
     };
 
-    axios.get(`${SERVER_URL}/getRules`).then((res) => {
+    axios.get(`${SERVER_URL}/getRules`)
+    .then((res) => {
       setFileLineComps(prevComps => {
         return res.data.map(rule => <Rule key={rule.id} rule={rule} />);
       });
-    });
+
+      setConn(true)
+      setReady(true)
+    }
+    
+    )
+    .catch((e) => {
+      // Can't reach server: used to display enter ip page
+      setConn(false)
+      setReady(true)
+
+    })
+    
 
     return () => {
       newWs.close();
     };
-  }, [SERVER_URL]);
+  }, [SERVER_URL, NODE_IP]);
 
   if (ws)
   {
+    ws.onerror = (e) => {
+      setConn(false)
+    }
+    ws.onclose = (e) => {
+      setConn(false)
+    }
+
+    /**
+     * A message was recieved from the Unity User.
+     * It was either a Y/N answer to our question,
+     * or a true/false of did they guess correct.
+     * 
+     * @param {Message String} event 
+     */
     ws.onmessage = (event) => {
       if (event.data === "Yes" || event.data === "No")
       {
@@ -53,28 +92,24 @@ const Main = () => {
       }
       else // They submitted an answer!
       {
-        let parts = event.data.split(',')
-        let answer = parts[0]
-        let question = parts[1]
-        let correct = check(question, answer)
-        
-
-        
-
-
-        if (correct)
+        if (event.data === "true")
         {
-          // Clear the screen, they got it right
+          // Clear the YN questions, they got it right
           setHeaderTxt("The player picked the correct number!");
           setHeaderColor('green')
 
           setComponents([])
-          // Refresh rules
+
+          // Refresh rules to uncheck them all
           axios.get(`${SERVER_URL}/getRules`).then((res) => {
             setFileLineComps(prevComps => {
               return res.data.map(rule => <Rule key={rule.id} rule={rule} />);
             });
-          });
+          })
+          .catch((e)=> {
+            setHeaderColor('red')
+            setHeaderTxt('Network Error while refreshing rules')
+          })
           
           
         }
@@ -84,64 +119,20 @@ const Main = () => {
           setHeaderColor('red')
         }
       
-        ws.send(correct? "true": "false");
 
       }
-      // See if they submitted the question
       
     }; 
 
   }
-
-  function check(q, a)
-  {
-    // Check conditions
-    // First and last digit are equal, swap the middle two
-    if (q.charAt(0) === q.charAt(3) && a.charAt(0) === a.charAt(3) 
-    &&  a.charAt(0) === q.charAt(0) && a.charAt(3) === q.charAt(3)
-    && a.charAt(1) === q.charAt(2) && a.charAt(2) === q.charAt(1)) return true;
-
-    // All numbers are even, reverse the code
-    if (areAllDigitsEven(q) && q === a.split('').reverse().join('') === q) return true;
-
-    // If all but one numbers are odd, the code is 1234
-    if (countOddDigits(q) === 3 && a === "1234") return true
-
-
-
-
-    // If no rules apply, the code is 0000
-    if (a === "0000") return true
-
-    return false
-        
-        
-  }
-
-  function countOddDigits(str) {
-    let count = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charAt(i);
-      // Check if the character is a digit and if it's odd
-      if (!isNaN(parseInt(char)) && parseInt(char) % 2 !== 0) {
-        count++; // Increment count if the digit is odd
-      }
-    }
-    return count;
-  }
-
-  function areAllDigitsEven(str) {
-    // Loop through each character in the string
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charAt(i);
-      // Check if the character is a digit and if it's even
-      if (!isNaN(parseInt(char)) && parseInt(char) % 2 !== 0) {
-        return false; // Return false if any digit is not even
-      }
-    }
-    return true; // Return true if all digits are even
-  }
   
+  // change and join the typed server ip
+  function setServerIP()
+  {
+    let ip = document.getElementById('ipEntry').value
+    localStorage.setItem('ip', ip); 
+    setNodeIp(ip)
+  }
 
   // Function to handle submitting the text input
   const handleSubmit = () => {
@@ -154,14 +145,40 @@ const Main = () => {
     }
   };
 
+  // wait to return until we're ready
+  if (!ready)
+  {
+    return (<p></p>)
+  }
 
+  // Failed to connect to the server
+  if (!conn)
+  {
+    // Failed to connect
+    return (
+      <div style={centeredContainerStyles}>
+      <h1>Failed to Connect</h1>
+      <div style={textInputContainerStyles}>
+          <label htmlFor="ipField">Server IP: </label>
+          <input 
+            type="text" 
+            id="ipEntry"
+            value={ipText}
+            onChange={(e)=> setIPText(e.target.value)} 
+            placeholder="Enter server address..." 
+          />
+          <button onClick={setServerIP}>Connect</button>
+      </div>
+    </div>
+    )
+  }
+  // Connected successfully to the server
   return (
     <div style = {{flex: 1, flexDirection: 'column'}}>
-      <p style = {{textAlign: 'center', color: headerColor}}>
+      <p style = {{color: headerColor, textAlign: 'center'}}>
         {headerTxt}
       </p>
 
-    
     <div style={{ display: 'flex', margin: '10px'}}>
       
       {/* Left side with text input and submit button */}
@@ -196,6 +213,22 @@ const Main = () => {
     </div>
     </div>
   );
+};
+
+const centeredContainerStyles = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minHeight: '100vh',
+  margin: 0,
+  padding: 0,
+};
+
+const textInputContainerStyles = {
+  marginTop: '20px',
+  display: 'flex',
+  flexDirection: 'column'
 };
 
 export default Main;

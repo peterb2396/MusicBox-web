@@ -12,7 +12,7 @@ const Rule = ({ rule }) => {
     margin: '2px',
     paddingLeft: '5px',
     paddingRight: '5px',
-    cursor: 'pointer', // Change cursor to pointer to indicate clickability
+    cursor: 'pointer', 
   };
 
   // Function to toggle background color when clicked
@@ -21,7 +21,7 @@ const Rule = ({ rule }) => {
   };
 
   return (
-    <div style={boxStyle} onClick={handleClick}> {/* Attach onClick event handler */}
+    <div style={boxStyle} onClick={handleClick}> 
       <p>{rule}</p>
     </div>
   );

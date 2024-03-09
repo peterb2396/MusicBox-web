@@ -7,6 +7,5 @@ const rootElement = ReactDOM.createRoot(document.getElementById("root"));
 rootElement.render(
   <React.StrictMode>
     <Main  />
-
   </React.StrictMode>,
 );
